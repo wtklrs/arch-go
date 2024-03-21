@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 1 * *'
+
+jobs:
+  example-job:
+    runs-on: arch-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          architecture: 'x64'
+
+      - name: Run scripts
+        run: |
+          bash update-modules.sh
+          rm -rf bin
+          cp -rv ~/.local/share/go/bin .
+        env:
+          GO111MODULE: 'on'
+          GOROOT: '/usr/lib/go'
+          GOPATH: '${XDG_DATA_HOME:-$HOME/.local/share}/go'
+          PATH:   '$PATH:${GOPATH}/bin:${GOROOT}/bin'
+
+      - name: Commit files
+        id: commit
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -A
+          git commit -m "update bin"
+        continue-on-error: true
+
+      - name: Check on failures
+        if: steps.commit.outputs.status == 'failure'
+        run: exit 1
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
